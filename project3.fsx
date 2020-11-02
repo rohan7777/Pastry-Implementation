@@ -10,7 +10,7 @@ let system = ActorSystem.Create("FSharp")
 
 let mutable actorMap : Map<string, IActorRef> = Map.empty
 let mutable actorHopsMap: Map<string,list<double>> = Map.empty
-let mutable srcdst : Map<string, string> = Map.empty
+// let mutable srcdst : Map<string, string> = Map.empty
 
 let numNodes = 1000
 let numRequests = 10
@@ -27,8 +27,8 @@ let rand = Random()
 
 // Spawn actor of peer here\
 
-type InitOrJoin = string * int * int    // Message type to trigger inin & join. First 2 are parameters for init and join ops, if third int == 0 - init else join 
-type RouteMsg = int * int * int * int
+// type InitOrJoin = string * int * int    // Message type to trigger inin & join. First 2 are parameters for init and join ops, if third int == 0 - init else join 
+// type RouteMsg = int * int * int * int
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,8 +41,8 @@ let Peer (mailbox: Actor<_>) =
     let mutable id: string = ""
     let mutable rows:int = 0
     let mutable cols: int = 16
-    let mutable prefix: string = ""
-    let mutable suffix: string = ""
+    // let mutable prefix: string = ""
+    // let mutable suffix: string = ""
     let mutable routingTable: string [,] = Array2D.zeroCreate 0 0
     let mutable leafSet: Set<string> = Set.empty
     let mutable commonPrefixLength: int = 0
@@ -52,7 +52,6 @@ let Peer (mailbox: Actor<_>) =
 
     let rec loop () =
         actor {
-
             let! receivedMessage = mailbox.Receive()
             // printfn "msg here %A" receivedMessage
             match box receivedMessage with
@@ -92,7 +91,7 @@ let Peer (mailbox: Actor<_>) =
                     let key = n1
                     let currentIndex = n2
                     let mutable i = 0
-                    let mutable j = 0
+                    // let mutable j = 0
                     let mutable k = currentIndex
                     while key.[i] = id.[i] do
                         i <- i+1
@@ -109,7 +108,7 @@ let Peer (mailbox: Actor<_>) =
                             // Update routing table of x
                             x <! routingRow
                             ()
-                        | None -> printfn "Did not find the specified value."
+                        | None -> printfn "Value not found."
                         k <- k+1
                     let rtrow = commonPrefixLength
                     let rtcol = Int32.Parse (key.[commonPrefixLength].ToString(), Globalization.NumberStyles.HexNumber)
@@ -123,8 +122,7 @@ let Peer (mailbox: Actor<_>) =
                             // Call join on selected node
                             x <! (key, k, 1)
                             ()
-                        | None -> printfn "Did not find the specified value."
-
+                        | None -> printfn "Value not found."
                     ()
             | :? (string[]) as newRow ->
                 // Update routing table
@@ -136,7 +134,6 @@ let Peer (mailbox: Actor<_>) =
                 let (key,source,hops) = route
                 if (id = key) then
                     if(actorHopsMap.ContainsKey(source)) then
-                        // let item = actorHopsMap
                         let found = actorHopsMap.TryFind source
                         match found with
                         | Some hopMap -> 
@@ -145,13 +142,21 @@ let Peer (mailbox: Actor<_>) =
                             let entry = [((avgHops*total)+(hops|>double))/(total+1.0); total+1.0]
                             actorHopsMap <- actorHopsMap.Add(source, entry)
                             ()
-                        | None -> printfn "Did not find the specified value."
+                        | None -> printfn "Value not found."
                     else 
                         let entry = [hops|>double; 1.0]
                         actorHopsMap <- actorHopsMap.Add(source, entry)
                 elif leafSet.Contains(key) then
-                    let act = actorMap.Item (key)
-                    act <! (key, source, hops+1)
+                    // let act = actorMap.Item (key)
+                    // act <! (key, source, hops+1)
+                    // let value = routingTable.[rtrow, rtcol]
+                    let found = actorMap.TryFind key
+                    match found with
+                    | Some x -> 
+                        // Call join on selected node
+                        x <! (key, source, hops+1)
+                        ()
+                    | None -> printfn "Value not found."
                 else
                     let mutable i = 0
                     let mutable j = 0
@@ -162,7 +167,23 @@ let Peer (mailbox: Actor<_>) =
                     let mutable rtcol = Int32.Parse(key.[commonPrefixLength].ToString(), Globalization.NumberStyles.HexNumber)
                     if(isNull routingTable.[rtrow, rtcol]) then
                         rtcol <- 0
-                    actorMap.Item(routingTable.[rtrow, rtcol]) <! (key, source, hops+1)
+                    // actorMap.Item(routingTable.[rtrow, rtcol]) <! (key, source, hops+1)
+                    
+
+                    let found = actorMap.TryFind routingTable.[rtrow, rtcol]
+                    match found with
+                    | Some x -> 
+                        // Call join on selected node
+                        x <! (key, source, hops+1)
+                        ()
+                    | None -> printfn "Value not found."
+                    
+
+
+
+
+
+
                 ()
 
 
@@ -196,8 +217,17 @@ for i in [1 .. numNodes-1] do
     actor <! (nodeId, numDigits, 0)
     actorMap <- actorMap.Add(nodeId, actor)
     let zeroth = String.replicate (numDigits|>int) "0"
-    let temp = actorMap.Item zeroth
-    temp <! (nodeId, 0, 1)
+    // let temp = actorMap.Item zeroth
+    // temp <! (nodeId, 0, 1)
+    let found = actorMap.TryFind zeroth
+    match found with
+    | Some chosenSource -> 
+        chosenSource <! (nodeId, 0, 1)
+        ()
+    | None -> printfn "Value not found."
+
+
+    
     Thread.Sleep 5
 
 Thread.Sleep 1000
@@ -214,8 +244,17 @@ while(k<=numRequests) do
         destinationId <- source
         while(destinationId = source) do
             destinationId <- actorsArray.[rand.Next actorsArray.Length]
-        let chosenSource = actorMap.Item source
-        chosenSource <! (destinationId, source, 0)
+        // let chosenSource = actorMap.Item source
+        // chosenSource <! (destinationId, source, 0)
+
+        let found = actorMap.TryFind source
+        match found with
+        | Some chosenSource -> 
+            chosenSource <! (destinationId, source, 0)
+            ()
+        | None -> printfn "Value not found."
+
+
         Thread.Sleep 5
     printfn "Each peer has performed %d requests" k
     k <- k+1
@@ -229,23 +268,7 @@ let nodeAvg = actorHopsMap |> Map.toSeq |> Seq.map snd |> Seq.toArray
 for hop in nodeAvg do
     totalHopSize <- totalHopSize + hop.[0]
 printfn "Avg Hop Size %A" (totalHopSize/(actorHopsMap.Count|>double))
+printfn "HOP map: %A" actorHopsMap
 
 
-
-
-(*
-    Thread.sleep(1000)
-	println("Requests processed")
-	//println("Hops map is ")	
-	var totalHopSize:Double = 0
-	//Global.actorHopsMap.foreach {keyVal => println(keyVal._1+"->"+keyVal._2.mkString(" "))}//+" "+Global.srcdst(keyVal._1))}
-	println("Computing average hop size")
-	Global.actorHopsMap.foreach {keyVal => totalHopSize += keyVal._2(0)}
-	//println("Hops map size is "+Global.actorHopsMap.keys.size)
-	
-	println("Avg Hop Size "+totalHopSize/Global.actorHopsMap.keys.size)
-	
-	System.exit(0)
-	}
-*)
 
