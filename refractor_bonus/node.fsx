@@ -12,11 +12,13 @@ module node =
     let Node (mailbox: Actor<_>) =
         let mutable nodeId: string = ""
         let mutable rows:int = 0
-        let mutable columns: int = 16
+        let mutable cloumns: int = 16
         let mutable routingTable: string [,] = Array2D.zeroCreate 0 0
         let mutable leafNodeSet: Set<string> = Set.empty
         let mutable commonPrefixLength: int = 0
         let mutable rowPtr: int = 0 
+
+
 
         let rec loop () =
             actor {
@@ -28,7 +30,7 @@ module node =
                         // Initilize operation
                         nodeId <- n1
                         rows <- n2
-                        routingTable <- Array2D.zeroCreate rows columns
+                        routingTable <- Array2D.zeroCreate rows cloumns
                         let mutable counter:int = 0
                         let number = Int32.Parse (nodeId, Globalization.NumberStyles.HexNumber)
                         let mutable left = number
@@ -93,6 +95,7 @@ module node =
                     let (key,source,hops) = route
                     if (nodeId = key) then
                         if(nodeHopMap.ContainsKey(source)) then
+                            // let item = nodeHopMap
                             let found = nodeHopMap.TryFind source
                             match found with
                             | Some hopMap -> 
@@ -113,15 +116,23 @@ module node =
                             nextDest <! (key, source, hops+1)
                             ()
                         | None -> printfn "Value not found."
+
                     else
                         let mutable i = 0
-                        while (key.[i] = nodeId.[i]) do
+                        while (key.Length <> 0 && key.[i] = nodeId.[i]) do
                             i <- i+1
                         commonPrefixLength <- i
                         let nextHopRow = commonPrefixLength
                         let mutable nextHopCol = Int32.Parse(key.[commonPrefixLength].ToString(), Globalization.NumberStyles.HexNumber)
+
+                        if (deadNodeSet.Contains routingTable.[nextHopRow, nextHopCol]) && (nextHopCol <> 0) then
+                            nextHopCol <- nextHopCol-1
+
                         if(isNull routingTable.[nextHopRow, nextHopCol]) then
                             nextHopCol <- 0
+
+                        if nodeId = "00" && nextHopCol = 0 then
+                            nextHopCol <- nextHopCol+1
 
                         let found = nodeMap.TryFind routingTable.[nextHopRow, nextHopCol]
                         match found with
@@ -129,7 +140,7 @@ module node =
                             // Call join on selected node
                             target <! (key, source, hops+1)
                             ()
-                        | None -> printfn "Value not found."
+                        | None -> ()
                     ()
                 |  _ -> return! loop ()
                 return! loop()
